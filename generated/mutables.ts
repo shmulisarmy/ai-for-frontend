@@ -22,6 +22,7 @@ export type Kanban = {
   tasks: Task[]
   comments: Comment[]
   users: string[]
+  current_user: string | null // Added current_user
 }
 
 export type Task = {
@@ -40,7 +41,7 @@ export type Comment = {
   task_id: number
 }
 
-export const useKanbanStore = create<{ state: Kanban }>((set) => ({
+export const useKanbanStore = create<{ state: Kanban; setCurrentUser: (user: string) => void }>((set) => ({
   state: {
     lists: ["To Do", "In Progress", "Done"],
     tasks: [
@@ -74,7 +75,9 @@ export const useKanbanStore = create<{ state: Kanban }>((set) => ({
       { id: 2, body: "Comment 2", author: "yosef", task_id: 3 },
     ],
     users: ["Shmuli", "yosef"],
+    current_user: null, // Initialize current_user
   },
+  setCurrentUser: (user: string) => set((state) => ({ state: { ...state.state, current_user: user } })),
 }))
 
 if (typeof window !== "undefined") {

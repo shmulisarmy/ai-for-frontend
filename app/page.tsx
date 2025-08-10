@@ -2,14 +2,15 @@
 
 import type React from "react"
 import { useEffect, useState } from "react"
-import { useKanbanStore, type Task } from "../generated/mutables"
+import { useKanbanStore, type Task, type Comment } from "../generated/mutables" // Import Comment type
 import {
   api_kanban_get_board,
   api_kanban_create_task,
   api_kanban_move_task,
   api_kanban_add_comment,
-  api_kanban_update_task, // Import new update task API
-  api_kanban_delete_task, // Import new delete task API
+  api_kanban_update_task,
+  api_kanban_delete_task,
+  api_kanban_delete_comment, // Import new delete comment API
 } from "../generated/routes"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -44,7 +45,7 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 export default function KanbanBoardPage() {
-  const { state: kanbanBoard } = useKanbanStore()
+  const { state: kanbanBoard, setCurrentUser } = useKanbanStore() // Get setCurrentUser from store
   const [newTaskTitle, setNewTaskTitle] = useState("")
   const [newTaskAuthor, setNewTaskAuthor] = useState("")
   const [newTaskDeadline, setNewTaskDeadline] = useState("")
@@ -58,10 +59,14 @@ export default function KanbanBoardPage() {
   const [isEditingTask, setIsEditingTask] = useState(false)
   const [editedTask, setEditedTask] = useState<Task | null>(null)
   const [isDeletingTask, setIsDeletingTask] = useState(false)
+  const [isDeletingComment, setIsDeletingComment] = useState(false)
 
+  // Set initial current user from store or default
   useEffect(() => {
-    api_kanban_get_board()
-  }, [])
+    if (kanbanBoard.users.length > 0 && !kanbanBoard.current_user) {
+      setCurrentUser(kanbanBoard.users[0])
+    }
+  }, [kanbanBoard.users, kanbanBoard.current_user, setCurrentUser])
 
   // Reset editedTask and isEditingTask when selectedTask changes
   useEffect(() => {
@@ -116,6 +121,12 @@ export default function KanbanBoardPage() {
     }
   }
 
+  const handleDeleteComment = async (commentId: number) => {
+    setIsDeletingComment(true)
+    await api_kanban_delete_comment(commentId)
+    setIsDeletingComment(false)
+  }
+
   const handleDragStart = (e: React.DragEvent, task: Task) => {
     setDraggedTask(task)
     e.dataTransfer.effectAllowed = "move"
@@ -156,10 +167,33 @@ export default function KanbanBoardPage() {
           Kanban Board
           <Display_data />
         </h1>
-        <Button variant="ghost" size="sm" onClick={handleRefresh} disabled={isRefreshing} className="gap-2">
-          {isRefreshing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-          Refresh Board
-        </Button>
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2">
+            <Label htmlFor="currentUserSelect" className="text-sm">
+              Current User:
+            </Label>
+            <Select
+              value={kanbanBoard.current_user || ""}
+              onValueChange={(value) => setCurrentUser(value)}
+              disabled={(kanbanBoard.users || []).length === 0}
+            >
+              <SelectTrigger id="currentUserSelect" className="w-[150px]">
+                <SelectValue placeholder="Select user" />
+              </SelectTrigger>
+              <SelectContent>
+                {(kanbanBoard.users || []).map((user) => (
+                  <SelectItem key={user} value={user}>
+                    {user}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <Button variant="ghost" size="sm" onClick={handleRefresh} disabled={isRefreshing} className="gap-2">
+            {isRefreshing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+            Refresh Board
+          </Button>
+        </div>
       </div>
 
       {/* Connection Status */}
@@ -338,9 +372,27 @@ export default function KanbanBoardPage() {
                 <p className="text-muted-foreground text-sm">No comments yet.</p>
               ) : (
                 selectedTask &&
-                getCommentsForTask(selectedTask.id).map((comment) => (
+                getCommentsForTask(selectedTask.id).map((comment: Comment) => (
                   <div key={comment.id} className="bg-gray-100 dark:bg-gray-800 p-3 rounded-md">
-                    <p className="text-sm font-medium">{comment.author}</p>
+                    <div className="flex justify-between items-center mb-1">
+                      <p className="text-sm font-medium">{comment.author}</p>
+                      {kanbanBoard.current_user === comment.author && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleDeleteComment(comment.id)}
+                          disabled={isDeletingComment}
+                          className="text-red-500 hover:text-red-600"
+                        >
+                          {isDeletingComment ? (
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                          ) : (
+                            <Trash2 className="h-3 w-3" />
+                          )}
+                          <span className="sr-only">Delete comment</span>
+                        </Button>
+                      )}
+                    </div>
                     <p className="text-muted-foreground text-sm mt-1">{comment.body}</p>
                   </div>
                 ))
@@ -414,7 +466,6 @@ export default function KanbanBoardPage() {
                   Edit Task
                 </Button>
               )}
-              
             </div>
           </DialogFooter>
         </DialogContent>
@@ -423,14 +474,7 @@ export default function KanbanBoardPage() {
   )
 }
 
-
-
-
 function Display_data() {
   const { state: kanbanBoard } = useKanbanStore()
-  return (
-    <p className="text-xs text-muted-foreground">
-      {JSON.stringify(kanbanBoard)}
-    </p>
-  )
+  return <p className="text-xs text-muted-foreground">{JSON.stringify(kanbanBoard)}</p>
 }

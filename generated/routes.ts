@@ -79,14 +79,28 @@ export function api_kanban_update_task(id: number, title: string, author: string
     .catch((error) => console.error("Error updating task:", error))
 }
 
+// Corrected: Delete Task API now uses API_BASE
+export function api_kanban_delete_task(id: number) {
+  fetch(`${API_BASE}/api/kanban/delete_task/${id}`)
+    .then((response) => {
+      if (response.headers.get("sync")) {
+        handle_server_sync(JSON.parse(response.headers.get("sync")))
+      }
+      return response.json()
+    })
+    .then((data) => console.log(data))
+    .catch((error) => console.error("Error deleting task:", error))
+}
 
-export function api_kanban_delete_task(_0: number, ){
-	//LINK /Users/shmuli/repositories/scout/main.go:146
-	fetch(`http://localhost:8080/api/kanban/delete_task/${_0}`)
-	.then(response => {
-	if (response.headers.get("sync")){
-		handle_server_sync(JSON.parse(response.headers.get("sync")))
-	}
-	return response.json()})
-	.then(data => console.log(data))
+// New: Delete Comment API
+export function api_kanban_delete_comment(id: number) {
+  fetch(`${API_BASE}/api/kanban/delete_comment/${id}`)
+    .then((response) => {
+      if (response.headers.get("sync")) {
+        handle_server_sync(JSON.parse(response.headers.get("sync")))
+      }
+      return response.json()
+    })
+    .then((data) => console.log(data))
+    .catch((error) => console.error("Error deleting comment:", error))
 }

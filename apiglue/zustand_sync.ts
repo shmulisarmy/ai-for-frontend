@@ -149,8 +149,8 @@ export function handle_server_sync(j: any) {
             const idToDelete = Number.parseInt(lastPart)
 
             if (!isNaN(idToDelete)) {
-              // This is an array item deletion by ID (e.g., "tasks.1")
-              const arrayPath = pathParts.slice(0, -1) // Path to the array itself (e.g., ['tasks'])
+              // This is an array item deletion by ID (e.g., "tasks.1" or "comments.5")
+              const arrayPath = pathParts.slice(0, -1) // Path to the array itself (e.g., ['tasks'] or ['comments'])
               const newState = deleteArrayItemImmutable(prev.state, arrayPath, idToDelete)
               return { ...prev, state: newState }
             } else {
