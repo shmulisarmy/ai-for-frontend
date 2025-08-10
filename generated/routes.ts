@@ -53,9 +53,7 @@ export function api_kanban_get_board() {
 }
 
 export function api_kanban_add_comment(taskId: number, author: string, body: string) {
-  fetch(`${API_BASE}/api/kanban/add_comment/${taskId}/${encodeURIComponent(author)}/${encodeURIComponent(body)}`, {
-    credentials: "include",
-  })
+  fetch(`${API_BASE}/api/kanban/add_comment/${taskId}/${encodeURIComponent(author)}/${encodeURIComponent(body)}`)
     .then((response) => {
       if (response.headers.get("sync")) {
         handle_server_sync(JSON.parse(response.headers.get("sync")))
@@ -81,15 +79,14 @@ export function api_kanban_update_task(id: number, title: string, author: string
     .catch((error) => console.error("Error updating task:", error))
 }
 
-// New: Delete Task API
-export function api_kanban_delete_task(id: number) {
-  fetch(`${API_BASE}/api/kanban/delete_task/${id}`)
-    .then((response) => {
-      if (response.headers.get("sync")) {
-        handle_server_sync(JSON.parse(response.headers.get("sync")))
-      }
-      return response.json()
-    })
-    .then((data) => console.log(data))
-    .catch((error) => console.error("Error deleting task:", error))
+
+export function api_kanban_delete_task(_0: number, ){
+	//LINK /Users/shmuli/repositories/scout/main.go:146
+	fetch(`http://localhost:8080/api/kanban/delete_task/${_0}`)
+	.then(response => {
+	if (response.headers.get("sync")){
+		handle_server_sync(JSON.parse(response.headers.get("sync")))
+	}
+	return response.json()})
+	.then(data => console.log(data))
 }

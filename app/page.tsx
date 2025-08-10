@@ -154,6 +154,7 @@ export default function KanbanBoardPage() {
       <div className="mb-8 flex items-center justify-between">
         <h1 className="text-4xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
           Kanban Board
+          <Display_data />
         </h1>
         <Button variant="ghost" size="sm" onClick={handleRefresh} disabled={isRefreshing} className="gap-2">
           {isRefreshing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
@@ -413,10 +414,23 @@ export default function KanbanBoardPage() {
                   Edit Task
                 </Button>
               )}
+              
             </div>
           </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
+  )
+}
+
+
+
+
+function Display_data() {
+  const { state: kanbanBoard } = useKanbanStore()
+  return (
+    <p className="text-xs text-muted-foreground">
+      {JSON.stringify(kanbanBoard)}
+    </p>
   )
 }
