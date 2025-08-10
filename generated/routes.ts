@@ -1,68 +1,95 @@
-import { handle_server_sync } from "../apiglue/zustand_sync";
+import { handle_server_sync } from "../apiglue/zustand_sync"
 
-const API_BASE = process.env.NODE_ENV === 'production' ? '' : '';
+const API_BASE = "https://scout-k9fna.sevalla.app"
 
-export function get_todos() {
-  fetch(`${API_BASE}/api/get_todos`, { credentials: 'include' })
-    .then(response => {
-      const syncHeader = response.headers.get("sync");
-      if (syncHeader) {
-        handle_server_sync(JSON.parse(syncHeader));
+export function api_ws() {
+  fetch(`${API_BASE}/api/ws`)
+    .then((response) => {
+      if (response.headers.get("sync")) {
+        handle_server_sync(JSON.parse(response.headers.get("sync")))
       }
-      return response.json();
+      return response.json()
     })
-    .then(data => console.log(data))
-    .catch(error => console.error('Error:', error));
+    .then((data) => console.log(data))
+    .catch((error) => console.error("Error with websocket endpoint:", error))
 }
 
-export function add_todo(title: string) {
-  fetch(`${API_BASE}/api/add_todo/${encodeURIComponent(title)}`, { 
-    credentials: 'include',
-    method: 'POST'
-  })
-    .then(response => {
-      const syncHeader = response.headers.get("sync");
-      if (syncHeader) {
-        handle_server_sync(JSON.parse(syncHeader));
+export function api_kanban_move_task(id: number, newList: string) {
+  fetch(`${API_BASE}/api/kanban/move_task/${id}/${encodeURIComponent(newList)}`)
+    .then((response) => {
+      if (response.headers.get("sync")) {
+        handle_server_sync(JSON.parse(response.headers.get("sync")))
       }
-      return response.json();
+      return response.json()
     })
-    .then(data => console.log(data))
-    .catch(error => console.error('Error:', error));
+    .then((data) => console.log(data))
+    .catch((error) => console.error("Error moving task:", error))
 }
 
-export function delete_todo(id: number) {
-  fetch(`${API_BASE}/api/delete_todo/${id}`, { 
-    credentials: 'include',
-    method: 'DELETE'
-  })
-    .then(response => {
-      const syncHeader = response.headers.get("sync");
-      if (syncHeader) {
-        handle_server_sync(JSON.parse(syncHeader));
+export function api_kanban_create_task(title: string, list: string, author: string, deadline: string) {
+  fetch(
+    `${API_BASE}/api/kanban/create_task/${encodeURIComponent(title)}/${encodeURIComponent(list)}/${encodeURIComponent(author)}/${encodeURIComponent(deadline)}`,
+  )
+    .then((response) => {
+      if (response.headers.get("sync")) {
+        handle_server_sync(JSON.parse(response.headers.get("sync")))
       }
-      return response.json();
+      return response.json()
     })
-    .then(data => console.log(data))
-    .catch(error => console.error('Error:', error));
+    .then((data) => console.log(data))
+    .catch((error) => console.error("Error creating task:", error))
 }
 
-export function update_todo(id: number, updates: Partial<{title: string, done: boolean, estimated_time: string}>) {
-  fetch(`${API_BASE}/api/update_todo/${id}`, { 
-    credentials: 'include',
-    method: 'PUT',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(updates)
-  })
-    .then(response => {
-      const syncHeader = response.headers.get("sync");
-      if (syncHeader) {
-        handle_server_sync(JSON.parse(syncHeader));
+export function api_kanban_get_board() {
+  fetch(`${API_BASE}/api/kanban/get_board`)
+    .then((response) => {
+      if (response.headers.get("sync")) {
+        handle_server_sync(JSON.parse(response.headers.get("sync")))
       }
-      return response.json();
+      return response.json()
     })
-    .then(data => console.log(data))
-    .catch(error => console.error('Error:', error));
+    .then((data) => console.log(data))
+    .catch((error) => console.error("Error getting kanban board:", error))
+}
+
+export function api_kanban_add_comment(taskId: number, author: string, body: string) {
+  fetch(`${API_BASE}/api/kanban/add_comment/${taskId}/${encodeURIComponent(author)}/${encodeURIComponent(body)}`, {
+    credentials: "include",
+  })
+    .then((response) => {
+      if (response.headers.get("sync")) {
+        handle_server_sync(JSON.parse(response.headers.get("sync")))
+      }
+      return response.json()
+    })
+    .then((data) => console.log(data))
+    .catch((error) => console.error("Error adding comment:", error))
+}
+
+// New: Update Task API
+export function api_kanban_update_task(id: number, title: string, author: string, deadline: string) {
+  fetch(
+    `${API_BASE}/api/kanban/update_task/${id}/${encodeURIComponent(title)}/${encodeURIComponent(author)}/${encodeURIComponent(deadline)}`,
+  )
+    .then((response) => {
+      if (response.headers.get("sync")) {
+        handle_server_sync(JSON.parse(response.headers.get("sync")))
+      }
+      return response.json()
+    })
+    .then((data) => console.log(data))
+    .catch((error) => console.error("Error updating task:", error))
+}
+
+// New: Delete Task API
+export function api_kanban_delete_task(id: number) {
+  fetch(`${API_BASE}/api/kanban/delete_task/${id}`)
+    .then((response) => {
+      if (response.headers.get("sync")) {
+        handle_server_sync(JSON.parse(response.headers.get("sync")))
+      }
+      return response.json()
+    })
+    .then((data) => console.log(data))
+    .catch((error) => console.error("Error deleting task:", error))
 }

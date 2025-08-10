@@ -1,245 +1,422 @@
 "use client"
 
+import type React from "react"
 import { useEffect, useState } from "react"
-import { useTodosStore } from "../generated/mutables"
-import { add_todo, delete_todo, get_todos, update_todo } from "../generated/routes"
+import { useKanbanStore, type Task } from "../generated/mutables"
+import {
+  api_kanban_get_board,
+  api_kanban_create_task,
+  api_kanban_move_task,
+  api_kanban_add_comment,
+  api_kanban_update_task, // Import new update task API
+  api_kanban_delete_task, // Import new delete task API
+} from "../generated/routes"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Checkbox } from "@/components/ui/checkbox"
 import { Badge } from "@/components/ui/badge"
-import { Trash2, Plus, RefreshCw, Clock, Edit2, Check, X } from 'lucide-react'
+import {
+  Plus,
+  RefreshCw,
+  User,
+  Clock,
+  CalendarDays,
+  GripVertical,
+  MessageSquare,
+  Send,
+  Loader2,
+  Edit,
+  Trash2,
+  Check,
+  X,
+} from "lucide-react"
+import { ConnectionStatus } from "../components/connection-status"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog"
+import { Textarea } from "@/components/ui/textarea"
+import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
-export default function TodosPage() {
-  const { state: todos } = useTodosStore()
-  const [newTodo, setNewTodo] = useState("")
+export default function KanbanBoardPage() {
+  const { state: kanbanBoard } = useKanbanStore()
+  const [newTaskTitle, setNewTaskTitle] = useState("")
+  const [newTaskAuthor, setNewTaskAuthor] = useState("")
+  const [newTaskDeadline, setNewTaskDeadline] = useState("")
   const [isRefreshing, setIsRefreshing] = useState(false)
-  const [editingId, setEditingId] = useState<number | null>(null)
-  const [editingTitle, setEditingTitle] = useState("")
+  const [draggedTask, setDraggedTask] = useState<Task | null>(null)
+  const [selectedTask, setSelectedTask] = useState<Task | null>(null)
+  const [newCommentBody, setNewCommentBody] = useState("")
+  const [newCommentAuthor, setNewCommentAuthor] = useState(kanbanBoard.users[0] || "")
+  const [isAddingTask, setIsAddingTask] = useState(false)
+  const [isPostingComment, setIsPostingComment] = useState(false)
+  const [isEditingTask, setIsEditingTask] = useState(false)
+  const [editedTask, setEditedTask] = useState<Task | null>(null)
+  const [isDeletingTask, setIsDeletingTask] = useState(false)
 
   useEffect(() => {
-    get_todos()
+    api_kanban_get_board()
   }, [])
 
-  const handleAddTodo = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (newTodo.trim()) {
-      add_todo(newTodo.trim())
-      setNewTodo("")
+  // Reset editedTask and isEditingTask when selectedTask changes
+  useEffect(() => {
+    if (selectedTask) {
+      setEditedTask({ ...selectedTask })
+      setIsEditingTask(false)
     }
-  }
+  }, [selectedTask])
 
   const handleRefresh = async () => {
     setIsRefreshing(true)
-    get_todos()
+    await api_kanban_get_board()
     setTimeout(() => setIsRefreshing(false), 500)
   }
 
-  const handleToggleDone = (id: number, done: boolean) => {
-    update_todo(id, { done: !done })
-  }
-
-  const handleStartEdit = (id: number, title: string) => {
-    setEditingId(id)
-    setEditingTitle(title)
-  }
-
-  const handleSaveEdit = () => {
-    if (editingId && editingTitle.trim()) {
-      update_todo(editingId, { title: editingTitle.trim() })
-      setEditingId(null)
-      setEditingTitle("")
+  const handleCreateTask = (list: string) => async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (newTaskTitle.trim() && newTaskAuthor.trim() && newTaskDeadline.trim()) {
+      setIsAddingTask(true)
+      await api_kanban_create_task(newTaskTitle.trim(), list, newTaskAuthor.trim(), newTaskDeadline.trim())
+      setNewTaskTitle("")
+      setNewTaskAuthor("")
+      setNewTaskDeadline("")
+      setIsAddingTask(false)
     }
   }
 
-  const handleCancelEdit = () => {
-    setEditingId(null)
-    setEditingTitle("")
+  const handleAddComment = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (selectedTask && newCommentBody.trim() && newCommentAuthor.trim()) {
+      setIsPostingComment(true)
+      await api_kanban_add_comment(selectedTask.id, newCommentAuthor.trim(), newCommentBody.trim())
+      setNewCommentBody("")
+      setIsPostingComment(false)
+    }
   }
 
-  const completedCount = todos.filter(todo => todo.done).length
-  const totalCount = todos.length
+  const handleSaveTaskEdit = async () => {
+    if (editedTask) {
+      setIsEditingTask(false) // Disable editing mode immediately
+      await api_kanban_update_task(editedTask.id, editedTask.title, editedTask.author, editedTask.deadline)
+      setSelectedTask(null) // Close modal after saving
+    }
+  }
+
+  const handleDeleteTask = async () => {
+    if (selectedTask) {
+      setIsDeletingTask(true)
+      await api_kanban_delete_task(selectedTask.id)
+      setSelectedTask(null) // Close modal after deleting
+      setIsDeletingTask(false)
+    }
+  }
+
+  const handleDragStart = (e: React.DragEvent, task: Task) => {
+    setDraggedTask(task)
+    e.dataTransfer.effectAllowed = "move"
+    e.dataTransfer.setData("text/plain", task.id.toString()) // Store task ID
+  }
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault() // Necessary to allow dropping
+    e.dataTransfer.dropEffect = "move"
+  }
+
+  const handleDrop = async (e: React.DragEvent, targetList: string) => {
+    e.preventDefault()
+    if (draggedTask && draggedTask.list !== targetList) {
+      await api_kanban_move_task(draggedTask.id, targetList)
+    }
+    setDraggedTask(null)
+  }
+
+  const getTasksForList = (listName: string) => {
+    if (!kanbanBoard || !Array.isArray(kanbanBoard.tasks)) {
+      return []
+    }
+    return kanbanBoard.tasks.filter((task) => task.list === listName)
+  }
+
+  const getCommentsForTask = (taskId: number) => {
+    if (!kanbanBoard || !Array.isArray(kanbanBoard.comments)) {
+      return []
+    }
+    return kanbanBoard.comments.filter((comment) => comment.task_id === taskId)
+  }
 
   return (
-    <div className="container mx-auto p-6 max-w-4xl">
-      <div className="mb-8">
-        <h1 className="text-4xl font-bold mb-4 bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-          Todo Dashboard
+    <div className="container mx-auto p-6 min-h-screen">
+      <div className="mb-8 flex items-center justify-between">
+        <h1 className="text-4xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
+          Kanban Board
         </h1>
-        <div className="flex items-center gap-4">
-          <Badge variant="outline" className="text-sm px-3 py-1">
-            {completedCount} of {totalCount} completed
-          </Badge>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={handleRefresh}
-            disabled={isRefreshing}
-            className="gap-2"
-          >
-            <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
-            Refresh
-          </Button>
-        </div>
+        <Button variant="ghost" size="sm" onClick={handleRefresh} disabled={isRefreshing} className="gap-2">
+          {isRefreshing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+          Refresh Board
+        </Button>
       </div>
 
-      {/* Add Todo Form */}
-      <Card className="mb-6 border-2 border-dashed border-gray-200 hover:border-gray-300 transition-colors">
-        <CardContent className="pt-6">
-          <form onSubmit={handleAddTodo} className="flex gap-2">
-            <Input
-              type="text"
-              placeholder="What needs to be done?"
-              value={newTodo}
-              onChange={(e) => setNewTodo(e.target.value)}
-              className="flex-1 text-lg"
-            />
-            <Button type="submit" disabled={!newTodo.trim()} className="px-6">
-              <Plus className="h-4 w-4 mr-2" />
-              Add Todo
-            </Button>
-          </form>
-        </CardContent>
-      </Card>
+      {/* Connection Status */}
+      <ConnectionStatus />
 
-      {/* Progress Bar */}
-      {totalCount > 0 && (
-        <Card className="mb-6">
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-sm font-medium">Overall Progress</span>
-              <span className="text-sm text-muted-foreground">
-                {Math.round((completedCount / totalCount) * 100)}%
-              </span>
-            </div>
-            <div className="w-full bg-secondary rounded-full h-3">
-              <div
-                className="bg-gradient-to-r from-green-500 to-blue-500 h-3 rounded-full transition-all duration-500 ease-out"
-                style={{ width: `${(completedCount / totalCount) * 100}%` }}
-              />
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Todo List */}
-      <div className="space-y-3">
-        {todos.length === 0 ? (
-          <Card className="border-2 border-dashed border-gray-200">
-            <CardContent className="pt-6">
-              <div className="text-center text-muted-foreground py-12">
-                <div className="text-6xl mb-4">📝</div>
-                <p className="text-xl mb-2">No todos yet!</p>
-                <p className="text-sm">Add your first todo above to get started.</p>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {(kanbanBoard.lists || []).map((listName) => (
+          <Card
+            key={listName}
+            className="flex flex-col bg-gray-50 dark:bg-gray-900 border-2 border-dashed border-gray-200 dark:border-gray-800 p-4 rounded-lg shadow-md"
+            onDragOver={handleDragOver}
+            onDrop={(e) => handleDrop(e, listName)}
+          >
+            <CardHeader className="pb-4">
+              <CardTitle className="text-xl font-semibold text-gray-800 dark:text-gray-100">
+                {listName} ({getTasksForList(listName).length})
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="flex-1 space-y-4">
+              {/* Task List */}
+              <div className="space-y-3 min-h-[100px]">
+                {getTasksForList(listName).length === 0 ? (
+                  <div className="text-center text-muted-foreground py-8">
+                    <p className="text-lg mb-2">No tasks here!</p>
+                    <p className="text-sm">Drag tasks here or add a new one below.</p>
+                  </div>
+                ) : (
+                  getTasksForList(listName).map((task) => (
+                    <Card
+                      key={task.id}
+                      className="bg-white dark:bg-gray-800 shadow-sm hover:shadow-md transition-shadow cursor-pointer"
+                      draggable="true"
+                      onDragStart={(e) => handleDragStart(e, task)}
+                      onClick={() => setSelectedTask(task)} // Open modal on click
+                    >
+                      <CardContent className="pt-4">
+                        <div className="flex items-center justify-between mb-2">
+                          <h3 className="font-medium text-base">{task.title}</h3>
+                          <GripVertical className="h-4 w-4 text-muted-foreground" />
+                        </div>
+                        <div className="flex flex-wrap gap-2 text-sm text-muted-foreground">
+                          <Badge variant="secondary" className="flex items-center gap-1">
+                            <User className="h-3 w-3" />
+                            {task.author}
+                          </Badge>
+                          <Badge variant="secondary" className="flex items-center gap-1">
+                            <Clock className="h-3 w-3" />
+                            {new Date(task.time).toLocaleDateString()}
+                          </Badge>
+                          {task.deadline && (
+                            <Badge variant="secondary" className="flex items-center gap-1">
+                              <CalendarDays className="h-3 w-3" />
+                              {new Date(task.deadline).toLocaleDateString()}
+                            </Badge>
+                          )}
+                          <Badge variant="outline" className="flex items-center gap-1">
+                            <MessageSquare className="h-3 w-3" />
+                            {getCommentsForTask(task.id).length}
+                          </Badge>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))
+                )}
               </div>
+
+              {/* Add Task Form */}
+              <form
+                onSubmit={handleCreateTask(listName)}
+                className="space-y-2 pt-4 border-t border-gray-200 dark:border-gray-700"
+              >
+                <div>
+                  <Label htmlFor={`newTaskTitle-${listName}`} className="text-sm">
+                    Task Title
+                  </Label>
+                  <Input
+                    id={`newTaskTitle-${listName}`}
+                    type="text"
+                    placeholder="Enter task title"
+                    value={newTaskTitle}
+                    onChange={(e) => setNewTaskTitle(e.target.value)}
+                    required
+                  />
+                </div>
+                <div>
+                  <Label htmlFor={`newTaskAuthor-${listName}`} className="text-sm">
+                    Author
+                  </Label>
+                  <Input
+                    id={`newTaskAuthor-${listName}`}
+                    type="text"
+                    placeholder="Enter author name"
+                    value={newTaskAuthor}
+                    onChange={(e) => setNewTaskAuthor(e.target.value)}
+                    required
+                  />
+                </div>
+                <div>
+                  <Label htmlFor={`newTaskDeadline-${listName}`} className="text-sm">
+                    Deadline
+                  </Label>
+                  <Input
+                    id={`newTaskDeadline-${listName}`}
+                    type="date"
+                    placeholder="Select deadline"
+                    value={newTaskDeadline}
+                    onChange={(e) => setNewTaskDeadline(e.target.value)}
+                    required
+                  />
+                </div>
+                <Button type="submit" className="w-full" disabled={isAddingTask}>
+                  {isAddingTask ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Plus className="h-4 w-4 mr-2" />}
+                  {isAddingTask ? "Adding Task..." : "Add Task"}
+                </Button>
+              </form>
             </CardContent>
           </Card>
-        ) : (
-          todos.map((todo) => (
-            <Card 
-              key={todo.id} 
-              className={`transition-all duration-200 hover:shadow-md ${
-                todo.done ? 'opacity-60 bg-gray-50' : 'hover:shadow-lg'
-              }`}
-            >
-              <CardContent className="pt-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3 flex-1">
-                    <Checkbox
-                      checked={todo.done}
-                      onCheckedChange={() => handleToggleDone(todo.id, todo.done)}
-                      className="mt-1"
-                    />
-                    <div className="flex-1">
-                      {editingId === todo.id ? (
-                        <div className="flex items-center gap-2">
-                          <Input
-                            value={editingTitle}
-                            onChange={(e) => setEditingTitle(e.target.value)}
-                            className="flex-1"
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') handleSaveEdit()
-                              if (e.key === 'Escape') handleCancelEdit()
-                            }}
-                            autoFocus
-                          />
-                          <Button size="sm" onClick={handleSaveEdit}>
-                            <Check className="h-4 w-4" />
-                          </Button>
-                          <Button size="sm" variant="ghost" onClick={handleCancelEdit}>
-                            <X className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      ) : (
-                        <>
-                          <div className="flex items-center gap-2">
-                            <p className={`font-medium text-lg ${
-                              todo.done ? 'line-through text-muted-foreground' : ''
-                            }`}>
-                              {todo.title}
-                            </p>
-                            {!todo.done && (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleStartEdit(todo.id, todo.title)}
-                                className="opacity-0 group-hover:opacity-100 transition-opacity"
-                              >
-                                <Edit2 className="h-3 w-3" />
-                              </Button>
-                            )}
-                          </div>
-                          <div className="flex items-center gap-4 mt-1 text-sm text-muted-foreground">
-                            <span className="flex items-center gap-1">
-                              <Clock className="h-3 w-3" />
-                              {new Date(todo.created_at).toLocaleDateString()}
-                            </span>
-                            {todo.estimated_time && (
-                              <Badge variant="secondary" className="text-xs">
-                                {todo.estimated_time}
-                              </Badge>
-                            )}
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => delete_todo(todo.id)}
-                    className="text-destructive hover:text-destructive hover:bg-destructive/10 ml-2"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          ))
-        )}
+        ))}
       </div>
 
-      {/* Stats Footer */}
-      {totalCount > 0 && (
-        <Card className="mt-8">
-          <CardContent className="pt-6">
-            <div className="grid grid-cols-3 gap-4 text-center">
-              <div>
-                <div className="text-2xl font-bold text-blue-600">{totalCount}</div>
-                <div className="text-sm text-muted-foreground">Total Tasks</div>
+      {/* Task Details Modal */}
+      <Dialog open={!!selectedTask} onOpenChange={() => setSelectedTask(null)}>
+        <DialogContent className="sm:max-w-[600px]">
+          <DialogHeader>
+            {isEditingTask ? (
+              <Input
+                value={editedTask?.title || ""}
+                onChange={(e) => setEditedTask((prev) => (prev ? { ...prev, title: e.target.value } : null))}
+                className="text-lg font-semibold"
+              />
+            ) : (
+              <DialogTitle>{selectedTask?.title}</DialogTitle>
+            )}
+            <DialogDescription>
+              <div className="flex flex-wrap gap-2 text-sm text-muted-foreground mt-2">
+                <Badge variant="secondary" className="flex items-center gap-1">
+                  <User className="h-3 w-3" />
+                  {isEditingTask ? (
+                    <Input
+                      value={editedTask?.author || ""}
+                      onChange={(e) => setEditedTask((prev) => (prev ? { ...prev, author: e.target.value } : null))}
+                      className="h-6 text-sm"
+                    />
+                  ) : (
+                    selectedTask?.author
+                  )}
+                </Badge>
+                <Badge variant="secondary" className="flex items-center gap-1">
+                  <Clock className="h-3 w-3" />
+                  {selectedTask?.time ? new Date(selectedTask.time).toLocaleDateString() : "N/A"}
+                </Badge>
+                {selectedTask?.deadline && (
+                  <Badge variant="secondary" className="flex items-center gap-1">
+                    <CalendarDays className="h-3 w-3" />
+                    {isEditingTask ? (
+                      <Input
+                        type="date"
+                        value={editedTask?.deadline || ""}
+                        onChange={(e) => setEditedTask((prev) => (prev ? { ...prev, deadline: e.target.value } : null))}
+                        className="h-6 text-sm"
+                      />
+                    ) : (
+                      new Date(selectedTask.deadline).toLocaleDateString()
+                    )}
+                  </Badge>
+                )}
               </div>
-              <div>
-                <div className="text-2xl font-bold text-green-600">{completedCount}</div>
-                <div className="text-sm text-muted-foreground">Completed</div>
-              </div>
-              <div>
-                <div className="text-2xl font-bold text-orange-600">{totalCount - completedCount}</div>
-                <div className="text-sm text-muted-foreground">Remaining</div>
-              </div>
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <h3 className="font-semibold mb-2">
+              Comments ({selectedTask ? getCommentsForTask(selectedTask.id).length : 0})
+            </h3>
+            <div className="space-y-3 max-h-60 overflow-y-auto pr-2">
+              {selectedTask && getCommentsForTask(selectedTask.id).length === 0 ? (
+                <p className="text-muted-foreground text-sm">No comments yet.</p>
+              ) : (
+                selectedTask &&
+                getCommentsForTask(selectedTask.id).map((comment) => (
+                  <div key={comment.id} className="bg-gray-100 dark:bg-gray-800 p-3 rounded-md">
+                    <p className="text-sm font-medium">{comment.author}</p>
+                    <p className="text-muted-foreground text-sm mt-1">{comment.body}</p>
+                  </div>
+                ))
+              )}
             </div>
-          </CardContent>
-        </Card>
-      )}
+            <form onSubmit={handleAddComment} className="mt-4 space-y-2">
+              <div>
+                <Label htmlFor="newCommentBody" className="text-sm">
+                  Comment
+                </Label>
+                <Textarea
+                  id="newCommentBody"
+                  placeholder="Add a new comment..."
+                  value={newCommentBody}
+                  onChange={(e) => setNewCommentBody(e.target.value)}
+                  required
+                />
+              </div>
+              <div>
+                <Label htmlFor="newCommentAuthor" className="text-sm">
+                  Your Name
+                </Label>
+                <Select
+                  value={newCommentAuthor}
+                  onValueChange={setNewCommentAuthor}
+                  required
+                  disabled={(kanbanBoard.users || []).length === 0}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Select author" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(kanbanBoard.users || []).map((user) => (
+                      <SelectItem key={user} value={user}>
+                        {user}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <Button type="submit" className="w-full" disabled={isPostingComment}>
+                {isPostingComment ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <Send className="h-4 w-4 mr-2" />
+                )}
+                {isPostingComment ? "Posting Comment..." : "Post Comment"}
+              </Button>
+            </form>
+          </div>
+          <DialogFooter className="flex justify-between items-center pt-4 border-t border-gray-200 dark:border-gray-700">
+            <Button variant="destructive" onClick={handleDeleteTask} disabled={isDeletingTask}>
+              {isDeletingTask ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Trash2 className="h-4 w-4 mr-2" />}
+              {isDeletingTask ? "Deleting..." : "Delete Task"}
+            </Button>
+            <div className="flex gap-2">
+              {isEditingTask ? (
+                <>
+                  <Button variant="outline" onClick={() => setIsEditingTask(false)}>
+                    <X className="h-4 w-4 mr-2" />
+                    Cancel
+                  </Button>
+                  <Button onClick={handleSaveTaskEdit}>
+                    <Check className="h-4 w-4 mr-2" />
+                    Save Changes
+                  </Button>
+                </>
+              ) : (
+                <Button variant="outline" onClick={() => setIsEditingTask(true)}>
+                  <Edit className="h-4 w-4 mr-2" />
+                  Edit Task
+                </Button>
+              )}
+            </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
